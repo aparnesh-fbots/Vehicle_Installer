@@ -1,0 +1,11 @@
+{
+    "mode": "install",
+    "robot": "amr",
+    "amr_safety_lidar": "LD19 Lidar",
+    "amr_nav_lidar": "P&F R2000",
+    "amr_version": "P&F R2000",
+    "bopt_safety_lidar": "LD19 Lidar",
+    "bopt_nav_lidar": "P&F 2000",
+    "bopt_cam": "Camera Module 01(Model Number)",
+    "bopt_version": "Latest BOPT Version"
+}

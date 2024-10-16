@@ -1,0 +1,15 @@
+#!/bin/bash
+set -e  # Exit immediately if a command exits with a non-zero status
+
+# Step 1: Stop any running services related to the package, if applicable
+echo "Stopping services related to AMR or BOPT, if running..."
+# Example (you can replace these with your actual services)
+# systemctl stop amr_service || true
+# systemctl stop bopt_service || true
+
+# Step 2: Remove any temporary files or logs if necessary
+echo "Cleaning up temporary files or logs (if any)..."
+# Example: rm -rf /opt/amr_package/temp/
+# Example: rm -rf /opt/bopt_package/temp/
+
+echo "Pre-removal operations completed."

@@ -1,0 +1,27 @@
+#!/bin/bash
+set -e  # Exit immediately if a command exits with a non-zero status
+
+# Step 1: Remove the directories for AMR or BOPT based on what was installed
+echo "Removing cloned repositories and related files..."
+
+if [ -d "/opt/amr_package" ]; then
+    echo "Removing AMR package directory..."
+    rm -rf /opt/amr_package
+fi
+
+if [ -d "/opt/bopt_package" ]; then
+    echo "Removing BOPT package directory..."
+    rm -rf /opt/bopt_package
+fi
+
+# Step 2: Optionally remove configuration files if they should not persist
+echo "Removing configuration files if they exist..."
+# Example: rm -f /etc/amr_config.conf
+# Example: rm -f /etc/bopt_config.conf
+
+# Step 3: Perform any other cleanup tasks, like stopping any lingering processes
+echo "Ensuring no lingering processes are running..."
+# Example: killall -9 amr_process_name || true
+# Example: killall -9 bopt_process_name || true
+
+echo "Post-removal cleanup completed."

@@ -1,0 +1,229 @@
+#!/bin/bash
+set -e  # Exit immediately if a command exits with a non-zero status
+
+LOGFILE="/var/log/vehicle_installer.log"
+
+# Function to log messages with a timestamp
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> $LOGFILE
+}
+
+# Ensure log file exists and has correct permissions
+setup_log_file() {
+    if [ ! -f $LOGFILE ]; then
+        touch $LOGFILE
+        chmod 666 $LOGFILE
+    fi
+}
+
+# Start logging
+setup_log_file
+log "Installation started."
+
+
+    
+
+# Check and install Python pip if not available
+if ! [ -x "$(command -v pip3)" ]; then
+    log "pip3 is not installed. Installing pip3."
+    sudo apt-get install -y python3-pip
+    log "pip3 installed successfully."
+else
+    log "pip3 is already installed."
+fi
+
+# Install Python dependencies for PyQt5
+log "Installing Python dependencies for PyQt5..."
+pip3 install PyQt5==5.15.11 PyQt5-Qt5==5.15.15 PyQt5_sip==12.15.0
+log "Python dependencies for PyQt5 installed successfully."
+
+
+
+
+
+
+python3 main.py
+
+log "GUI invoked for user selection. Waiting for input."
+echo "Please follow the logs here for further steps."
+
+# Path to the JSON file
+JSON_FILE="../vehicle_installer_data.json"
+
+# Step 1: Ensure jq is installed
+log "Checking if jq is installed..."
+if ! [ -x "$(command -v jq)" ]; then
+    log "jq is not installed. Installing jq."
+    sudo apt-get install -y jq
+    log "jq installed successfully."
+else
+    log "jq is already installed."
+fi
+
+# Step 2: Extract the robot type (amr or bopt) from the JSON
+ROBOT=$(jq -r '.robot' $JSON_FILE)
+log "Robot selected: $ROBOT"
+
+# Step 3: Handle installation based on the robot type (AMR or BOPT)
+if [ "$ROBOT" == "amr" ]; then
+    log "Installing AMR software..."
+
+    # Step 4: Extract AMR-specific information from the JSON
+    AMR_VERSION=$(jq -r '.amr_version' $JSON_FILE)
+    AMR_REPO_URL="https://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@github.com/yugvir10/AM50_V2.git"
+    
+    # Step 5: Clone the AMR repo based on the version selected
+    TARGET_DIR="/opt/"
+    log "Cloning AMR repository from branch: $AMR_VERSION"
+    git clone --branch "$AMR_VERSION" "$AMR_REPO_URL" "$TARGET_DIR"
+    log "AMR repository cloned successfully."
+
+    # Step 6: Set executable permissions for AMR startup scripts
+    # log "Setting executable permissions for AMR startup scripts."
+    # chmod +x "$TARGET_DIR/startup_scripts/*"
+
+    # Step 7: Install the AMR-specific lidar drivers based on the JSON file
+    AMR_LIDAR=$(jq -r '.amr_safety_lidar' $JSON_FILE)
+    if [ "$AMR_LIDAR" == "LD19 Lidar" ]; then
+        log "Installing LD19 Lidar driver..."
+        sudo apt install -y ld19-lidar-driver-package
+        log "LD19 Lidar driver installed successfully."
+    elif [ "$AMR_LIDAR" == "Sick Lidar" ]; then
+        log "Installing Sick Lidar driver..."
+        sudo apt install -y sick-lidar-driver-package
+        log "Sick Lidar driver installed successfully."
+    fi
+
+    # Step 8: Install the AMR navigation lidar driver
+    AMR_NAV_LIDAR=$(jq -r '.amr_nav_lidar' $JSON_FILE)
+    if [ "$AMR_NAV_LIDAR" == "P&F R2000" ]; then
+        log "Installing P&F R2000 Lidar driver..."
+        sudo apt install -y r2000-lidar-driver-package
+        log "P&F R2000 Lidar driver installed successfully."
+    fi
+
+    # ROS2 installation for AMR (Foxy and Galactic)
+    log "Installing ROS2 Foxy and Galactic for AMR..."
+
+    # Foxy Install
+    log "Installing ROS2 Foxy desktop..."
+    sudo apt update && sudo apt install locales
+    sudo locale-gen en_US en_US.UTF-8
+    sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+    export LANG=en_US.UTF-8
+    sudo apt install software-properties-common
+    sudo add-apt-repository universe
+    sudo apt update && sudo apt install curl -y
+    sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+    sudo apt update && sudo apt upgrade
+    sudo apt install ros-foxy-desktop python3-argcomplete
+    sudo apt install ros-dev-tools
+    log "ROS2 Foxy desktop installed successfully."
+
+    # Galactic Install
+    log "Installing ROS2 Galactic desktop..."
+    sudo apt update && sudo apt install curl
+    sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+    sudo apt update && sudo apt upgrade
+    sudo apt install ros-galactic-desktop
+    sudo apt install ros-dev-tools
+    log "ROS2 Galactic desktop installed successfully."
+
+    # Install and run rosdep
+    log "Installing rosdep..."
+    sudo apt-get install python3-rosdep
+    sudo rosdep init
+    rosdep update
+    log "rosdep installed and updated successfully."
+
+    # Step 10: Build the AMR workspace in a subshell
+    log "Building the AMR ROS2 workspace..."
+    (
+        source /opt/ros/galactic/setup.bash
+        cd "$TARGET_DIR/AM50_V2/am_ws"
+        rosdep install --from-paths src --ignore-src -r -y
+        colcon build
+        log "AMR ROS2 workspace built successfully."
+    )
+
+elif [ "$ROBOT" == "bopt" ]; then
+    log "Installing BOPT software..."
+
+    # Step 4: Extract BOPT-specific information from the JSON
+    BOPT_VERSION=$(jq -r '.bopt_version' $JSON_FILE)
+    BOPT_REPO_URL="https://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@github.com/yugvir10/BOPT_V2.git"
+    
+    # Step 5: Clone the BOPT repo based on the version selected
+    TARGET_DIR="/opt/"
+    log "Cloning BOPT repository from branch: $BOPT_VERSION"
+    git clone --branch "$BOPT_VERSION" "$BOPT_REPO_URL" "$TARGET_DIR"
+    log "BOPT repository cloned successfully."
+
+    # Step 6: Set executable permissions for BOPT startup scripts
+    # log "Setting executable permissions for BOPT startup scripts."
+    # chmod +x "$TARGET_DIR/startup_scripts/*"
+
+    # ROS2 installation for BOPT (Foxy and Galactic)
+    log "Installing ROS2 Foxy and Galactic for BOPT..."
+
+    # Foxy Install
+    log "Installing ROS2 Foxy desktop..."
+    sudo apt update && sudo apt install locales
+    sudo locale-gen en_US en_US.UTF-8
+    sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+    export LANG=en_US.UTF-8
+    sudo apt install software-properties-common
+    sudo add-apt-repository universe
+    sudo apt update && sudo apt install curl -y
+    sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+    sudo apt update && sudo apt upgrade
+    sudo apt install ros-foxy-desktop python3-argcomplete
+    sudo apt install ros-dev-tools
+    log "ROS2 Foxy desktop installed successfully."
+
+    # Galactic Install
+    log "Installing ROS2 Galactic desktop..."
+    sudo apt update && sudo apt install curl
+    sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+    sudo apt update && sudo apt upgrade
+    sudo apt install ros-galactic-desktop
+    sudo apt install ros-dev-tools
+    log "ROS2 Galactic desktop installed successfully."
+
+    # Install and run rosdep
+    log "Installing rosdep..."
+    sudo apt-get install python3-rosdep
+    sudo rosdep init
+    rosdep update
+    log "rosdep installed and updated successfully."
+
+    # Step 10: Build the BOPT workspace in a subshell
+    log "Building the BOPT ROS2 workspace..."
+    (
+        source /opt/ros/galactic/setup.bash
+        cd "$TARGET_DIR/BOPT_V2/bopt_ws"
+        rosdep install --from-paths src --ignore-src -r -y
+        colcon build
+        log "BOPT ROS2 workspace built successfully."
+    )
+
+else
+    log "Error: Invalid robot selection in JSON file. No installation will be performed."
+    exit 1
+fi
+
+# Step 11: Final reboot prompt
+log "Installation complete. Prompting for system reboot."
+echo "Installation complete. Please reboot the system for changes to take effect."
+read -p "Reboot now? (y/n): " REBOOT_CHOICE
+if [ "$REBOOT_CHOICE" == "y" ]; then
+    log "System reboot initiated by user."
+    sudo reboot
+else
+    log "User chose not to reboot immediately."
+    echo "Please reboot the system manually to finalize the setup."
+fi
